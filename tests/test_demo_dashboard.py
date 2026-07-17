@@ -52,12 +52,18 @@ class FrontendContractTest(unittest.TestCase):
             'renderQuestionReferenceBlock("解析", question.explanation, "解析待补")',
             app_source,
         )
+        self.assertIn("const options = normalizeQuestionOptions", app_source)
+        self.assertIn('textElement("h3", "选项", "question-options-title")', app_source)
+        self.assertIn('isLegacyInline ? "选项沿用旧题干内嵌格式。" : "选项未记录。"', app_source)
+        self.assertIn("raw.blocker_reason", app_source)
+        self.assertIn("frequency.blocker_reason", app_source)
         self.assertIn("element.textContent = text;", app_source)
         self.assertNotIn(".innerHTML", app_source)
         self.assertIn(".question-reference-text {", style_source)
         self.assertIn("overflow-wrap: anywhere;", style_source)
         self.assertIn("white-space: pre-wrap;", style_source)
         self.assertIn("grid-template-columns: minmax(0, 1fr);", style_source)
+        self.assertIn(".question-option-text {", style_source)
 
 
 class DemoDashboardTest(unittest.TestCase):
@@ -72,15 +78,19 @@ class DemoDashboardTest(unittest.TestCase):
 
     def test_generator_and_strict_validator(self) -> None:
         self.assertTrue(self.created["synthetic"])
-        self.assertEqual(self.created["schema_version"], 9)
+        self.assertEqual(self.created["schema_version"], 10)
         self.assertEqual(self.created["schema_scope"], "dashboard-compatible-subset")
         self.assertEqual(self.created["integrity_check"], "ok")
         with sqlite3.connect(self.database) as connection:
-            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 9)
+            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 10)
+            self.assertEqual(
+                connection.execute("SELECT COUNT(*) FROM question_options").fetchone()[0],
+                32,
+            )
         report = validate(self.database)
         self.assertTrue(report["strict_ready"])
-        self.assertEqual(report["schema_version"], 9)
-        self.assertEqual(report["sqlite_user_version"], 9)
+        self.assertEqual(report["schema_version"], 10)
+        self.assertEqual(report["sqlite_user_version"], 10)
         self.assertEqual(report["eligible_attempts"], 7)
         self.assertEqual(report["scored_attempts"], 6)
         self.assertEqual(report["eligible_questions"], 7)
@@ -142,6 +152,12 @@ class DemoDashboardTest(unittest.TestCase):
         self.assertEqual(
             [row["source_type"] for row in details],
             ["真题", "教材课后习题", "辅导书题", "AI变式题"],
+        )
+        self.assertTrue(all(row["options_status"] == "structured" for row in details))
+        self.assertTrue(all(len(row["options"]) == 4 for row in details))
+        self.assertEqual(
+            [option["key"] for option in details[0]["options"]],
+            ["A", "B", "C", "D"],
         )
         ranks = DashboardRepository._source_rank
         self.assertLess(ranks("真题改写"), ranks("AI变式题"))
@@ -237,6 +253,15 @@ class DemoDashboardTest(unittest.TestCase):
         after = sha256(self.database)
         self.assertEqual(before, after)
         self.assertEqual(summary["freshness"]["data_cutoff_date"], "2026-06-11")
+
+    def test_question_details_support_legacy_database_without_options_table(self) -> None:
+        with sqlite3.connect(self.database) as connection:
+            connection.execute("DROP TABLE question_options")
+        details = self.repository.questions(
+            {"mastery_unit_id": ["demo:unit:retrieval"]}
+        )["questions"]
+        self.assertTrue(all(row["options"] == [] for row in details))
+        self.assertTrue(all(row["options_status"] == "missing" for row in details))
 
 
 if __name__ == "__main__":

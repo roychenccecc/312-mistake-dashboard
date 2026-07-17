@@ -516,9 +516,13 @@ function normalizeKnowledge(payload) {
           ),
           blockedReason: textValue(firstDefined(
             raw.exam_blocked_reason,
+            raw.exam_blocker_reason,
             raw.blocked_reason,
+            raw.blocker_reason,
             frequency.blocked_reason,
+            frequency.blocker_reason,
             audit.blocked_reason,
+            audit.blocker_reason,
           )),
         },
       };
@@ -531,6 +535,10 @@ function normalizeQuestions(payload) {
   return unwrapArray(payload, ["items", "questions", "data"])
     .map((raw) => {
       const metrics = objectValue(raw.metrics) || {};
+      const stem = textValue(firstValue(raw, ["stem", "question_text", "prompt", "title"])) || "题干暂缺";
+      const questionFamily = textValue(firstValue(raw, ["question_family", "family"]));
+      const questionType = textValue(firstValue(raw, ["question_type", "type"]));
+      const options = normalizeQuestionOptions(firstDefined(raw.options, raw.choices));
       const failureRecords = [raw.failures, raw.failure_records, raw.attempts, raw.records]
         .find((value) => Array.isArray(value));
       const failureCount = Array.isArray(raw.failures)
@@ -544,11 +552,20 @@ function normalizeQuestions(payload) {
         ));
       return {
         id: textValue(firstValue(raw, ["question_id", "id"])),
-        stem: textValue(firstValue(raw, ["stem", "question_text", "prompt", "title"])) || "题干暂缺",
+        stem,
         answer: textValue(firstValue(raw, ["answer", "reference_answer", "correct_answer"])),
         explanation: textValue(firstValue(raw, ["explanation", "analysis", "rationale"])),
         sourceType: textValue(firstValue(raw, ["source_type", "source", "origin"])) || "来源未知",
-        questionType: textValue(firstValue(raw, ["question_type", "type"])),
+        questionType,
+        questionFamily,
+        options,
+        optionsStatus: normalizeQuestionOptionsStatus(
+          firstDefined(raw.options_status, raw.option_status),
+          questionFamily,
+          questionType,
+          stem,
+          options,
+        ),
         sourceYear: textValue(firstValue(raw, ["source_year", "year", "exam_year"])),
         errorRate: rateValue(firstDefined(raw.error_rate, raw.weighted_error_rate, metrics.error_rate)),
         eligibleAttempts: integerValue(firstDefined(
@@ -570,6 +587,32 @@ function normalizeQuestions(payload) {
       if (rateDiff) return rateDiff;
       return a.stem.localeCompare(b.stem, "zh-CN");
     });
+}
+
+function normalizeQuestionOptions(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((raw, index) => ({
+      key: textValue(firstValue(raw, ["key", "option_key", "label"])),
+      text: textValue(firstValue(raw, ["text", "option_text", "content"])),
+      position: integerValue(firstDefined(raw?.position, raw?.display_order, index + 1)),
+    }))
+    .filter((option) => option.key && option.text)
+    .sort((a, b) => nullableNumber(a.position, Number.MAX_SAFE_INTEGER)
+      - nullableNumber(b.position, Number.MAX_SAFE_INTEGER));
+}
+
+function normalizeQuestionOptionsStatus(value, family, questionType, stem, options) {
+  const normalized = textValue(value).toLowerCase();
+  if (["structured", "legacy_inline", "missing", "not_applicable"].includes(normalized)) {
+    return normalized;
+  }
+  if (options.length) return "structured";
+  const objective = ["single_choice", "multiple_choice", "other_objective"].includes(family)
+    || /(选择|单选|多选|匹配|判断|排序|分类)/.test(questionType);
+  if (!objective) return "not_applicable";
+  if (/(^|\s)[A-H]\s*[.．、:：。)）]\s*\S/i.test(stem)) return "legacy_inline";
+  return "missing";
 }
 
 function normalizeAttempts(value) {
@@ -904,6 +947,9 @@ function renderQuestions(questions) {
     body.className = "question-body";
     body.append(textElement("p", question.stem, "question-full-stem"));
 
+    const options = renderQuestionOptions(question);
+    if (options) body.append(options);
+
     const meta = document.createElement("div");
     meta.className = "question-meta";
     [
@@ -950,6 +996,38 @@ function renderQuestions(questions) {
     details.append(summary, body);
     elements.questionList.append(details);
   });
+}
+
+function renderQuestionOptions(question) {
+  if (question.optionsStatus === "not_applicable") return null;
+
+  const section = document.createElement("section");
+  section.className = "question-options-panel";
+  section.append(textElement("h3", "选项", "question-options-title"));
+
+  if (question.options.length) {
+    const list = document.createElement("ul");
+    list.className = "question-options-list";
+    question.options.forEach((option) => {
+      const item = document.createElement("li");
+      item.className = "question-option-item";
+      item.append(
+        textElement("span", option.key, "question-option-key"),
+        textElement("span", option.text, "question-option-text"),
+      );
+      list.append(item);
+    });
+    section.append(list);
+    return section;
+  }
+
+  const isLegacyInline = question.optionsStatus === "legacy_inline";
+  section.append(textElement(
+    "p",
+    isLegacyInline ? "选项沿用旧题干内嵌格式。" : "选项未记录。",
+    `question-options-note${isLegacyInline ? "" : " is-missing"}`,
+  ));
+  return section;
 }
 
 function renderQuestionReferenceBlock(label, content, missingText) {

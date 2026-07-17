@@ -15,7 +15,7 @@ DEFAULT_DATABASE = PROJECT_ROOT / "data" / "demo.sqlite3"
 
 SCHEMA = r"""
 PRAGMA foreign_keys = ON;
-PRAGMA user_version = 9;
+PRAGMA user_version = 10;
 
 CREATE TABLE system_meta (
     key TEXT PRIMARY KEY,
@@ -53,6 +53,23 @@ CREATE TABLE questions (
     answer TEXT,
     explanation TEXT,
     question_family TEXT
+);
+
+CREATE TABLE question_options (
+    question_id TEXT NOT NULL
+        REFERENCES questions(question_id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    option_key TEXT NOT NULL COLLATE NOCASE CHECK (trim(option_key) <> ''),
+    option_text TEXT NOT NULL CHECK (trim(option_text) <> ''),
+    position INTEGER NOT NULL CHECK (position >= 1),
+    verification_status TEXT NOT NULL DEFAULT 'unknown'
+        CHECK (verification_status IN ('unknown', 'candidate', 'verified', 'generated')),
+    source_reference TEXT,
+    metadata_json TEXT CHECK (metadata_json IS NULL OR json_valid(metadata_json)),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (question_id, option_key),
+    UNIQUE (question_id, position)
 );
 
 CREATE TABLE chapter_mastery_units (
@@ -138,14 +155,18 @@ def seed(connection: sqlite3.Connection) -> None:
     connection.executemany(
         "INSERT INTO system_meta(key, value) VALUES (?, ?)",
         (
-            ("schema_version", "9"),
+            ("schema_version", "10"),
             ("dataset_kind", "synthetic_demo"),
             ("schema_scope", "dashboard-compatible-subset"),
         ),
     )
     connection.executemany(
         "INSERT INTO schema_migrations(version, name) VALUES (?, ?)",
-        ((8, "dashboard_mapping_integrity"), (9, "unique_verified_primary_mapping")),
+        (
+            (8, "dashboard_mapping_integrity"),
+            (9, "unique_verified_primary_mapping"),
+            (10, "structured_question_options"),
+        ),
     )
     connection.executemany(
         "INSERT INTO chapters(chapter_id, subject, name) VALUES (?, ?, ?)",
@@ -308,6 +329,24 @@ def seed(connection: sqlite3.Connection) -> None:
         ) VALUES (?, ?, '示例心理学', ?, ?, ?, ?, ?, ?)
         """,
         questions,
+    )
+    objective_question_ids = [
+        question[0]
+        for question in questions
+        if question[-1] in {"single_choice", "multiple_choice", "other_objective"}
+    ]
+    connection.executemany(
+        """
+        INSERT INTO question_options(
+            question_id, option_key, option_text, position,
+            verification_status, source_reference, metadata_json
+        ) VALUES (?, ?, ?, ?, 'generated', 'synthetic-demo', '{}')
+        """,
+        [
+            (question_id, key, f"完全虚构的{key}项", position)
+            for question_id in objective_question_ids
+            for position, key in enumerate(("A", "B", "C", "D"), start=1)
+        ],
     )
 
     mappings = (
@@ -535,7 +574,13 @@ def create_database(database: Path, *, force: bool = False) -> dict[str, object]
             raise RuntimeError(f"integrity check failed: {integrity}")
         counts = {
             table: int(connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
-            for table in ("chapters", "chapter_mastery_units", "questions", "attempts")
+            for table in (
+                "chapters",
+                "chapter_mastery_units",
+                "questions",
+                "question_options",
+                "attempts",
+            )
         }
     except Exception:
         if temporary.exists():
@@ -557,7 +602,7 @@ def create_database(database: Path, *, force: bool = False) -> dict[str, object]
         "status": "created",
         "synthetic": True,
         "database": display_database,
-        "schema_version": 9,
+        "schema_version": 10,
         "schema_scope": "dashboard-compatible-subset",
         "integrity_check": integrity,
         "counts": counts,

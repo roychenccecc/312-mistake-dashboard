@@ -32,6 +32,15 @@ DEFAULT_FRONTEND = PROJECT_ROOT / "integrations" / "mistake-dashboard"
 DEFAULT_PORT = 4174
 ELIGIBLE_PHASES = ("pre_review", "delayed_retest", "legacy")
 REAL_EXAM_SOURCE = "真题"
+OBJECTIVE_QUESTION_FAMILIES = {
+    "single_choice",
+    "multiple_choice",
+    "other_objective",
+}
+INLINE_OPTION_PATTERN = re.compile(
+    r"(?:^|\s)(?:[A-H])\s*[.．、:：。)）]\s*\S",
+    re.IGNORECASE | re.MULTILINE,
+)
 
 SUBJECT_ALIASES = {
     "发展": "发展心理学",
@@ -246,7 +255,7 @@ class DashboardRepository:
                 a.error_notes, a.is_delayed_retest, a.needs_retest,
                 a.attempt_phase, a.mastery_unit_id, a.score_weight,
                 q.source_type, q.subject AS question_subject, q.year,
-                q.question_type, q.prompt, q.answer, q.explanation,
+                q.question_type, q.question_family, q.prompt, q.answer, q.explanation,
                 s.chapter_id AS session_chapter_id,
                 mu.mastery_unit_id AS valid_mastery_unit_id,
                 mu.chapter_id AS mastery_chapter_id
@@ -756,6 +765,51 @@ class DashboardRepository:
             "needs_retest": bool(row["needs_retest"]),
         }
 
+    def _load_question_options(
+        self,
+        connection: sqlite3.Connection,
+        question_ids: Iterable[str],
+    ) -> dict[str, list[dict[str, Any]]]:
+        identifiers = sorted(set(question_ids))
+        output = {question_id: [] for question_id in identifiers}
+        if not identifiers or not self._table_exists(connection, "question_options"):
+            return output
+        placeholders = ",".join("?" for _ in identifiers)
+        rows = connection.execute(
+            f"""
+            SELECT question_id, option_key, option_text, position,
+                   verification_status
+            FROM question_options
+            WHERE question_id IN ({placeholders})
+            ORDER BY question_id, position, option_key
+            """,
+            identifiers,
+        ).fetchall()
+        for row in rows:
+            output[str(row["question_id"])].append(
+                {
+                    "key": row["option_key"],
+                    "text": row["option_text"],
+                    "position": row["position"],
+                    "verification_status": row["verification_status"],
+                }
+            )
+        return output
+
+    @staticmethod
+    def _question_options_status(
+        question_family: str | None,
+        prompt: str | None,
+        options: Sequence[Mapping[str, Any]],
+    ) -> str:
+        if question_family not in OBJECTIVE_QUESTION_FAMILIES:
+            return "not_applicable"
+        if options:
+            return "structured"
+        if INLINE_OPTION_PATTERN.search(str(prompt or "")):
+            return "legacy_inline"
+        return "missing"
+
     def questions(self, query: Mapping[str, Sequence[str]]) -> dict[str, Any]:
         filters = QueryFilters.from_query(query)
         values = query.get("mastery_unit_id", ())
@@ -794,10 +848,14 @@ class DashboardRepository:
             by_question: dict[str, list[dict[str, Any]]] = {}
             for row in rows:
                 by_question.setdefault(str(row["question_id"]), []).append(row)
+            options_by_question = self._load_question_options(
+                connection, by_question
+            )
 
             questions: list[dict[str, Any]] = []
             for question_id, question_rows in by_question.items():
                 first = question_rows[0]
+                options = options_by_question.get(question_id, [])
                 public_attempts = [self._attempt_public(row) for row in question_rows]
                 failures = [
                     self._attempt_public(row)
@@ -810,7 +868,12 @@ class DashboardRepository:
                         "source_type": first["source_type"],
                         "year": first["year"],
                         "question_type": first["question_type"],
+                        "question_family": first["question_family"],
                         "prompt": first["prompt"],
+                        "options": options,
+                        "options_status": self._question_options_status(
+                            first["question_family"], first["prompt"], options
+                        ),
                         "answer": first["answer"],
                         "explanation": first["explanation"],
                         "source_rank": self._source_rank(first["source_type"]),

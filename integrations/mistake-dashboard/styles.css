@@ -788,7 +788,68 @@ input[type="date"] {
 }
 
 .question-full-stem {
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+
+.question-options-panel {
+  min-width: 0;
+  margin: 10px 0 14px;
+  padding: 12px 14px;
+  background: #fbfcfd;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+}
+
+.question-options-title {
+  margin: 0 0 8px;
+  font-size: 0.86rem;
+}
+
+.question-options-list {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.question-option-item {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  min-width: 0;
+}
+
+.question-option-key {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  color: var(--blue);
+  background: var(--blue-soft);
+  border-radius: 50%;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.question-option-text {
+  min-width: 0;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.question-options-note {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+}
+
+.question-options-note.is-missing {
+  color: #8a5a15;
+  font-style: italic;
 }
 
 .question-meta {
