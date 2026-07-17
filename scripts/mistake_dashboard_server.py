@@ -37,6 +37,10 @@ OBJECTIVE_QUESTION_FAMILIES = {
     "multiple_choice",
     "other_objective",
 }
+OPTION_REQUIRED_QUESTION_FAMILIES = {
+    "single_choice",
+    "multiple_choice",
+}
 INLINE_OPTION_PATTERN = re.compile(
     r"(?:^|\s)(?:[A-H])\s*[.．、:：。)）]\s*\S",
     re.IGNORECASE | re.MULTILINE,
@@ -802,13 +806,13 @@ class DashboardRepository:
         prompt: str | None,
         options: Sequence[Mapping[str, Any]],
     ) -> str:
-        if question_family not in OBJECTIVE_QUESTION_FAMILIES:
-            return "not_applicable"
         if options:
             return "structured"
         if INLINE_OPTION_PATTERN.search(str(prompt or "")):
             return "legacy_inline"
-        return "missing"
+        if question_family in OPTION_REQUIRED_QUESTION_FAMILIES:
+            return "missing"
+        return "not_applicable"
 
     def questions(self, query: Mapping[str, Sequence[str]]) -> dict[str, Any]:
         filters = QueryFilters.from_query(query)

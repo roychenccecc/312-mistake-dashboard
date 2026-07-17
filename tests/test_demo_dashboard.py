@@ -263,6 +263,24 @@ class DemoDashboardTest(unittest.TestCase):
         self.assertTrue(all(row["options"] == [] for row in details))
         self.assertTrue(all(row["options_status"] == "missing" for row in details))
 
+    def test_unlabelled_other_objective_does_not_claim_options_are_missing(self) -> None:
+        self.assertEqual(
+            DashboardRepository._question_options_status(
+                "other_objective",
+                "将项目分别归入两个命名类别。",
+                [],
+            ),
+            "not_applicable",
+        )
+        self.assertEqual(
+            DashboardRepository._question_options_status(
+                "multiple_choice",
+                "只有题干，没有选项。",
+                [],
+            ),
+            "missing",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
