@@ -1,0 +1,44 @@
+name: Public release tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Reject private data and secrets
+        run: python3 scripts/check_public_release.py
+
+      - name: Compile Python sources
+        run: python3 -m py_compile $(find scripts tests -type f -name '*.py' -print)
+
+      - name: Generate synthetic demo database
+        run: python3 scripts/create_demo_database.py
+
+      - name: Run standard-library unit tests
+        run: python3 -m unittest discover -s tests -p 'test_*.py'
+
+      - name: Validate synthetic demo data
+        run: >-
+          python3 scripts/sqlite/validate_mistake_dashboard_data.py
+          --database data/demo.sqlite3
+          --strict

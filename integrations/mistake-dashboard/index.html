@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <meta
+      name="description"
+      content="312 心理学章节与知识点错误率只读分析看板"
+    >
+    <title>312 错题分析看板</title>
+    <link rel="stylesheet" href="./styles.css?v=20260717-4">
+    <script src="./app.js?v=20260717-4" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">跳到主要内容</a>
+
+    <header class="site-header">
+      <div class="shell header-inner">
+        <div>
+          <p class="eyebrow">312 REVIEW · READ ONLY</p>
+          <h1>错题分析看板</h1>
+          <p class="header-copy">从章节走到知识点，分清“我哪里容易错”和“考试在哪里常考”。</p>
+        </div>
+        <div class="freshness" aria-label="数据状态">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="freshness-label">正在读取本地数据库…</span>
+        </div>
+      </div>
+    </header>
+
+    <main id="main-content" class="shell">
+      <section class="filter-section" aria-labelledby="filter-title">
+        <div class="section-heading compact-heading">
+          <div>
+            <p class="section-kicker">视图范围</p>
+            <h2 id="filter-title">筛选数据</h2>
+          </div>
+          <p class="read-only-note">仅查询，不会修改 SQLite、Notion 或复习管理器。</p>
+        </div>
+
+        <form id="filter-form" class="filters">
+          <label>
+            <span>科目</span>
+            <select id="subject-filter" name="subject">
+              <option value="">全部科目</option>
+            </select>
+          </label>
+          <label>
+            <span>章节</span>
+            <select id="chapter-filter" name="chapter_id">
+              <option value="">全部章节</option>
+            </select>
+          </label>
+          <label>
+            <span>开始日期</span>
+            <input id="date-from-filter" name="date_from" type="date">
+          </label>
+          <label>
+            <span>结束日期</span>
+            <input id="date-to-filter" name="date_to" type="date">
+          </label>
+          <div class="filter-actions">
+            <button class="primary-button" type="submit">应用筛选</button>
+            <button class="secondary-button" id="reset-filters" type="button">清除</button>
+          </div>
+        </form>
+        <p id="filter-error" class="inline-error" role="alert" hidden></p>
+      </section>
+
+      <div id="page-status" class="page-status" role="status" aria-live="polite">
+        正在汇总合格作答…
+      </div>
+      <div id="page-error" class="error-panel" role="alert" hidden>
+        <strong>数据暂时无法读取</strong>
+        <span id="page-error-message">请确认本地看板服务已经启动。</span>
+        <button id="retry-button" class="secondary-button" type="button">重新读取</button>
+      </div>
+
+      <section id="summary-section" class="dashboard-section" aria-labelledby="summary-title" hidden>
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">总览</p>
+            <h2 id="summary-title">当前学习画像</h2>
+          </div>
+          <p id="summary-range" class="section-note">全部已记录日期</p>
+        </div>
+
+        <div class="kpi-grid">
+          <article class="kpi-card">
+            <p>综合错误率</p>
+            <strong id="overall-error-rate">—</strong>
+            <span id="overall-error-context">等待合格样本</span>
+          </article>
+          <article class="kpi-card accent-card">
+            <p>真题错误率</p>
+            <strong id="exam-error-rate">—</strong>
+            <span id="exam-error-context">只统计来源为“真题”的作答</span>
+          </article>
+          <article class="kpi-card">
+            <p>合格作答</p>
+            <strong id="eligible-attempt-count">—</strong>
+            <span id="question-count-context">独立、无提示；分数覆盖另列</span>
+          </article>
+          <article class="kpi-card coverage-card">
+            <p>数据覆盖</p>
+            <div class="coverage-lines">
+              <span><b id="mapping-coverage-rate">—</b> 知识点映射</span>
+              <span><b id="exam-coverage-rate">—</b> 考频完整核验</span>
+            </div>
+            <span id="coverage-context">未知不会按 0 处理</span>
+          </article>
+        </div>
+      </section>
+
+      <section id="chapters-section" class="dashboard-section" aria-labelledby="chapters-title" hidden>
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">章节概览</p>
+            <h2 id="chapters-title">错误率与样本量</h2>
+          </div>
+          <p class="section-note">按综合错误率从高到低排列；点击章节查看知识点。</p>
+        </div>
+        <div id="chapter-empty" class="empty-state" hidden>当前筛选范围内没有章节作答。</div>
+        <div
+          id="chapter-chart"
+          class="chapter-chart"
+          role="list"
+          aria-label="各章节综合错误率横向条形图"
+        ></div>
+      </section>
+
+      <section id="knowledge-section" class="dashboard-section" aria-labelledby="knowledge-title" hidden>
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">知识点诊断</p>
+            <h2 id="knowledge-title">选择一个章节</h2>
+          </div>
+          <p id="knowledge-summary" class="section-note">点击上方章节后读取知识点。</p>
+        </div>
+
+        <div id="knowledge-loading" class="subtle-status" role="status" hidden>正在读取知识点…</div>
+        <div id="knowledge-empty" class="empty-state" hidden>这个章节还没有可计算的知识点作答。</div>
+
+        <div id="knowledge-content" hidden>
+          <div class="table-wrap">
+            <table class="data-table">
+              <caption class="sr-only">所选章节各知识点错误率、样本量和考频证据</caption>
+              <thead>
+                <tr>
+                  <th scope="col">知识点</th>
+                  <th scope="col">综合错误率</th>
+                  <th scope="col">真题错误率</th>
+                  <th scope="col">计分样本</th>
+                  <th scope="col">已核验考频</th>
+                  <th scope="col"><span class="sr-only">操作</span></th>
+                </tr>
+              </thead>
+              <tbody id="knowledge-table-body"></tbody>
+            </table>
+          </div>
+
+          <section class="comparison-section" aria-labelledby="comparison-title">
+            <div class="subsection-heading">
+              <div>
+                <h3 id="comparison-title">错频 × 考频</h3>
+                <p>纵轴是个人综合错误率，横轴是完成 2007–2026 核验后的不同年份数。</p>
+              </div>
+              <span id="comparison-count" class="count-badge"></span>
+            </div>
+            <div id="comparison-chart" class="scatter-chart" hidden></div>
+            <div id="comparison-fallback" class="comparison-fallback" hidden>
+              <p id="comparison-fallback-note"></p>
+              <div class="table-wrap">
+                <table class="data-table compact-table">
+                  <caption class="sr-only">已完成考频核验的知识点比较</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">知识点</th>
+                      <th scope="col">个人错误率</th>
+                      <th scope="col">出现次数</th>
+                      <th scope="col">不同年份</th>
+                      <th scope="col">近三年</th>
+                    </tr>
+                  </thead>
+                  <tbody id="comparison-table-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section id="unknown-frequency-section" class="unknown-section" aria-labelledby="unknown-title" hidden>
+            <div class="subsection-heading">
+              <div>
+                <h3 id="unknown-title">暂不进入考频比较</h3>
+                <p>考频未完成语义核验或个人错误率暂无数据；未知不会当作 0 次。</p>
+              </div>
+              <span id="unknown-count" class="count-badge"></span>
+            </div>
+            <div id="unknown-frequency-list" class="unknown-list"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="questions-section" class="dashboard-section question-section" aria-labelledby="questions-title" hidden>
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">题目明细</p>
+            <h2 id="questions-title" tabindex="-1">相关题目</h2>
+          </div>
+          <p id="questions-summary" class="section-note"></p>
+        </div>
+        <div id="questions-loading" class="subtle-status" role="status" hidden>正在读取题目…</div>
+        <div id="questions-empty" class="empty-state" hidden>这个知识点还没有可展示的题目。</div>
+        <div id="question-list" class="question-list"></div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="shell">
+        <p>本地只读分析 · 数据以 SQLite 为准 · 考频未知不等于 0 次</p>
+      </div>
+    </footer>
+  </body>
+</html>

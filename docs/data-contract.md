@@ -23,7 +23,8 @@ HTTP 服务固定监听 `127.0.0.1`。API 仅支持 `GET`，响应设置 `Cache-
 |---|---|---|
 | `chapters` | `chapter_id`, `subject`, `name` | 原始科目和章节目录 |
 | `review_sessions` | `session_id`, `chapter_id` | 作答会话与原始章节关联 |
-| `questions` | `question_id`, `source_type`, `year`, `question_type`, `prompt`, `answer`, `explanation` | 题目来源和展示内容 |
+| `questions` | `question_id`, `source_type`, `year`, `question_type`, `question_family`, `prompt`, `answer`, `explanation` | 题目来源、题干、参考答案和解析 |
+| `question_options` | `question_id`, `option_key`, `option_text`, `position`, `verification_status`, `source_reference` | v10 结构化选项；顺序与来源证据独立于题干 |
 | `attempts` | `attempt_id`, `question_id`, `session_id`, `attempt_date`, `attempt_phase`, `independent_answer`, `used_hint`, `score`, `max_score`, `score_weight`, `mastery_unit_id` | 动态错误率的事实记录 |
 | `chapter_mastery_units` | `mastery_unit_id`, `chapter_id`, `name`, `module_name` | 知识点目录 |
 | `question_mastery_unit_links` | `question_id`, `mastery_unit_id`, `semantic_verification_status`, `tested_dimension` | 题目到知识点的语义映射 |
@@ -183,6 +184,17 @@ AND year_end = 2026
 ### `GET /api/questions?mastery_unit_id=...`
 
 返回知识点下具有当前筛选范围内合格作答的题目及其失败记录；仅有考频映射、但尚无个人合格作答的原题不混入个人错题明细。默认展示顺序为真题、教材题、辅导书题、改写/变式题、AI/自编题及其他来源；来源排序不改变任何指标。
+
+题目明细还返回按 `position` 排序的 `options`，以及以下 `options_status`：
+
+| 状态 | 含义 |
+|---|---|
+| `structured` | 已从 `question_options` 读取结构化选项 |
+| `legacy_inline` | 旧题把选项保留在 `prompt` 中，前端不重复渲染 |
+| `missing` | 客观题没有可展示的选项，页面明确提示“选项未记录” |
+| `not_applicable` | 简答、论述等题型不需要选项 |
+
+为兼容尚未执行 v10 迁移的只读数据库，`question_options` 表不存在时服务不会报错；客观题会依据旧题干格式返回 `legacy_inline` 或 `missing`。服务端不在运行时猜测、拆分或写回旧题干。
 
 ## 9. 空值与对账规则
 
