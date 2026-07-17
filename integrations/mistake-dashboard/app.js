@@ -545,6 +545,8 @@ function normalizeQuestions(payload) {
       return {
         id: textValue(firstValue(raw, ["question_id", "id"])),
         stem: textValue(firstValue(raw, ["stem", "question_text", "prompt", "title"])) || "题干暂缺",
+        answer: textValue(firstValue(raw, ["answer", "reference_answer", "correct_answer"])),
+        explanation: textValue(firstValue(raw, ["explanation", "analysis", "rationale"])),
         sourceType: textValue(firstValue(raw, ["source_type", "source", "origin"])) || "来源未知",
         questionType: textValue(firstValue(raw, ["question_type", "type"])),
         sourceYear: textValue(firstValue(raw, ["source_year", "year", "exam_year"])),
@@ -912,6 +914,14 @@ function renderQuestions(questions) {
     ].filter(Boolean).forEach((label) => meta.append(textElement("span", label)));
     body.append(meta);
 
+    const referenceContent = document.createElement("div");
+    referenceContent.className = "question-reference-grid";
+    referenceContent.append(
+      renderQuestionReferenceBlock("参考答案", question.answer, "参考答案待补"),
+      renderQuestionReferenceBlock("解析", question.explanation, "解析待补"),
+    );
+    body.append(referenceContent);
+
     if (question.attempts.length) {
       body.append(textElement("h3", "失败与部分得分记录"));
       const list = document.createElement("ul");
@@ -940,6 +950,20 @@ function renderQuestions(questions) {
     details.append(summary, body);
     elements.questionList.append(details);
   });
+}
+
+function renderQuestionReferenceBlock(label, content, missingText) {
+  const block = document.createElement("section");
+  block.className = "question-reference-card";
+  block.append(
+    textElement("h3", label, "question-reference-title"),
+    textElement(
+      "p",
+      content || missingText,
+      `question-reference-text${content ? "" : " is-missing"}`,
+    ),
+  );
+  return block;
 }
 
 function renderFrequencyBadge(frequency) {

@@ -800,6 +800,39 @@ input[type="date"] {
   font-size: 0.8rem;
 }
 
+.question-reference-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.question-reference-card {
+  min-width: 0;
+  padding: 12px 14px;
+  background: var(--surface-alt);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+}
+
+.question-reference-title {
+  margin: 0 0 7px;
+  font-size: 0.86rem;
+}
+
+.question-reference-text {
+  min-width: 0;
+  margin: 0;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.question-reference-text.is-missing {
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
 .source-badge {
   color: var(--blue);
   background: var(--blue-soft);
@@ -989,6 +1022,10 @@ input[type="date"] {
 
   .question-body {
     padding-left: 14px;
+  }
+
+  .question-reference-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .attempt-item {

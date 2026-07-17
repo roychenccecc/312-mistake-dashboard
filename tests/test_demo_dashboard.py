@@ -27,6 +27,39 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+class FrontendContractTest(unittest.TestCase):
+    def test_preserves_and_safely_renders_reference_content(self) -> None:
+        app_source = (ROOT / "integrations" / "mistake-dashboard" / "app.js").read_text(
+            encoding="utf-8"
+        )
+        style_source = (
+            ROOT / "integrations" / "mistake-dashboard" / "styles.css"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            'answer: textValue(firstValue(raw, ["answer", "reference_answer", "correct_answer"]))',
+            app_source,
+        )
+        self.assertIn(
+            'explanation: textValue(firstValue(raw, ["explanation", "analysis", "rationale"]))',
+            app_source,
+        )
+        self.assertIn(
+            'renderQuestionReferenceBlock("参考答案", question.answer, "参考答案待补")',
+            app_source,
+        )
+        self.assertIn(
+            'renderQuestionReferenceBlock("解析", question.explanation, "解析待补")',
+            app_source,
+        )
+        self.assertIn("element.textContent = text;", app_source)
+        self.assertNotIn(".innerHTML", app_source)
+        self.assertIn(".question-reference-text {", style_source)
+        self.assertIn("overflow-wrap: anywhere;", style_source)
+        self.assertIn("white-space: pre-wrap;", style_source)
+        self.assertIn("grid-template-columns: minmax(0, 1fr);", style_source)
+
+
 class DemoDashboardTest(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
